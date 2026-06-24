@@ -1,0 +1,14 @@
+[project]
+name = "RAG"
+version = "1.0.0"
+description = "Retrieval-Augmented Generation"
+requires-python = ">=3.10"
+dependencies = [
+    "flake8",
+    "mypy",
+    "pydantic",
+    "fire",
+    "tqdm",
+    "bm25s",
+    "langchain-text-splitters"
+]
