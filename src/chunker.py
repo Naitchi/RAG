@@ -12,7 +12,8 @@ class Chunker:
     def clean_hub(self, chunks: list[str]) -> list[str]:
         cleaned_chunks: list[str] = []
         for chunk in chunks:
-            if len(chunk.strip()) <= 200:
+            print(chunk)
+            if len(chunk["chunk"].strip()) <= 200:
                 continue
             cleaned_chunks.append(chunk)
         return cleaned_chunks
@@ -20,9 +21,11 @@ class Chunker:
     def format_chunks(self, chunks: list[str]) -> list[str]:
         formated = [
             re.sub(
-                r"\s*([,.;:!?()])\s*", r"\1", re.sub(r"\s+", " ", text).strip()
+                r"\s*([,.;:!?()])\s*",
+                r"\1",
+                re.sub(r"\s+", " ", chunk["chunk"]).strip(),
             )
-            for text in chunks
+            for chunk in chunks
         ]
         return self.clean_hub(formated)
 
@@ -40,32 +43,45 @@ class Chunker:
                     content: str = f.read()
                     if content.strip() == "":
                         continue
-                    if file.suffix == ".txt":
-                        chunks.extend(self.chunk_text(content))
+                    if file.suffix == ".txt" or file.suffix == ".rst":
+                        # TODO faire une fonction pour recuperer le chemin mais que depuis le dossier du vllmpath
+                        chunks.extend(self.chunk_text(content, file.resolve()))
                     elif file.suffix == ".md":
-                        chunks.extend(self.chunk_md(content))
-                    # elif file.suffix == ".py":
-                    #     chunks.extend(self.chunk_code(content))
+                        chunks.extend(self.chunk_md(content, file.resolve()))
+                    elif file.suffix == ".py":
+                        chunks.extend(self.chunk_code(content, file.resolve()))
 
         chunks = self.format_chunks(chunks)
         with open("chunks.json", "w") as f:
             json.dump(chunks, f, indent=4)
 
-    def chunk_text(self, text):
+    def chunk_text(self, text, file_path):
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=1500,
             chunk_overlap=200,
             separators=["\n\n", "\n", " ", ""],
         )
-        return splitter.split_text(text)
+        chunks = splitter.split_text(text)
+        rslt = [{"file_path": file_path, "chunk": chunk} for chunk in chunks]
+        return rslt
 
-    def chunk_md(self, md):
+    def chunk_md(self, md, file_path):
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=1500,
             chunk_overlap=200,
             separators=["#", "##", "###", "####", "\n\n", "\n", "|", " ", ""],
         )
-        return splitter.split_text(md)
+        chunks = splitter.split_text(md)
+        rslt = [{"file_path": file_path, "chunk": chunk} for chunk in chunks]
+        return rslt
 
-    def chunk_code(self, code):
-        pass
+    def chunk_code(self, code, file_path):
+        tree = ast.parse(code)
+        chunks = []
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                if len(ast.dump(node)) > 2000:
+                    print(
+                        f"Node type: {type(node).__name__}, len: {len(ast.dump(node))}"
+                    )
+        return chunks
