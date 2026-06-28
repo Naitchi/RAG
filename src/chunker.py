@@ -12,30 +12,33 @@ class Chunker:
     def clean_hub(self, chunks: list[str]) -> list[str]:
         cleaned_chunks: list[str] = []
         for chunk in chunks:
-            print(chunk)
-            if len(chunk["chunk"].strip()) <= 200:
+            if len(chunk["chunk"]) <= 200:
                 continue
             cleaned_chunks.append(chunk)
         return cleaned_chunks
 
+    # TODO faire une fonction qui check si tout fait bien moins de 2000
+
     def format_chunks(self, chunks: list[str]) -> list[str]:
         formated = [
-            re.sub(
-                r"\s*([,.;:!?()])\s*",
-                r"\1",
-                re.sub(r"\s+", " ", chunk["chunk"]).strip(),
-            )
+            {
+                "file_path": chunk["file_path"],
+                "chunk": re.sub(
+                    r"\s*([,.;:!?()])\s*",
+                    r"\1",
+                    re.sub(r"\s+", " ", chunk["chunk"]).strip(),
+                ),
+            }
             for chunk in chunks
         ]
         return self.clean_hub(formated)
 
     def get_files_and_chunks(self):
-        ignored: list = ["setup.py"]
-        authorized: list = [".txt", ".py", ".md", ".rst"]
-        chunks: list[str] = []
+        ignored: list[str] = ["setup.py"]
+        authorized: list[str] = [".txt", ".py", ".md", ".rst"]
+        chunks: list[dict[str, str]] = []
 
         for file in Path(self.vllm_path).rglob("*"):
-            print(f"Processing file: {file.name}")
             if file.name in ignored:
                 continue
             if file.suffix in authorized:
@@ -53,7 +56,7 @@ class Chunker:
 
         chunks = self.format_chunks(chunks)
         with open("chunks.json", "w") as f:
-            json.dump(chunks, f, indent=4)
+            json.dump(chunks, f, indent=4, default=str)
 
     def chunk_text(self, text, file_path):
         splitter = RecursiveCharacterTextSplitter(
@@ -81,7 +84,18 @@ class Chunker:
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
                 if len(ast.dump(node)) > 2000:
-                    print(
-                        f"Node type: {type(node).__name__}, len: {len(ast.dump(node))}"
+                    splitter = RecursiveCharacterTextSplitter(
+                        chunk_size=1500,
+                        chunk_overlap=200,
+                        separators=[
+                            "\n\n",
+                            "\n",
+                            " ",
+                            "",
+                        ],
                     )
-        return chunks
+                    chunks.extend(splitter.split_text(ast.dump(node)))
+                else:
+                    chunks.append(ast.dump(node))
+        rslt = [{"file_path": file_path, "chunk": chunk} for chunk in chunks]
+        return rslt
