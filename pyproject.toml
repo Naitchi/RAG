@@ -10,5 +10,6 @@ dependencies = [
     "fire",
     "tqdm",
     "bm25s",
-    "langchain-text-splitters"
+    "langchain-text-splitters",
+    "accelerate"
 ]
