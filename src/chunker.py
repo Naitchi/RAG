@@ -19,6 +19,37 @@ class Chunker:
         self.vllm_path = vllm_path
         self.chunk_size = 2000
 
+    def create_chunks(
+        self,
+        text: str,
+        file_path: str,
+        splitter: RecursiveCharacterTextSplitter,
+    ) -> list[Chunk]:
+        chunks = splitter.split_text(text)
+
+        rslt: list[Chunk] = []
+        cursor: int = 0
+
+        for chunk in chunks:
+            first = text.find(chunk, cursor)
+
+            if first == -1:
+                first = text.find(chunk)
+
+            last = first + len(chunk)
+            cursor = last
+
+            rslt.append(
+                {
+                    "first_character_index": first,
+                    "last_character_index": last,
+                    "file_path": file_path,
+                    "text": chunk,
+                }
+            )
+
+        return rslt
+
     def clean_hub(self, chunks: list[Chunk]) -> list[Chunk]:
         cleaned_chunks: list[Chunk] = []
         for chunk in chunks:
@@ -87,35 +118,22 @@ class Chunker:
             json.dump(chunks, f, indent=4, default=str)
 
     def chunk_text(self, text: str, file_path: str) -> list[Chunk]:
-        rslt: list[Chunk] = []
-        start = 0
         splitter: RecursiveCharacterTextSplitter = (
             RecursiveCharacterTextSplitter(
-                chunk_size=self.chunk_size * 0.75,
-                chunk_overlap=self.chunk_size * 0.10,
+                chunk_size=int(self.chunk_size * 0.75),
+                chunk_overlap=int(self.chunk_size * 0.10),
+                add_start_index=True,
                 separators=["\n\n", "\n", " ", ""],
             )
         )
-        chunks: list[str] = splitter.split_text(text)
-        for chunk in chunks:
-            first = text.find(chunk, start)
-            last = first + len(chunk)
-            start = last
-            rslt.append(
-                {
-                    "first_character_index": first,
-                    "last_character_index": last,
-                    "file_path": file_path,
-                    "text": chunk,
-                }
-            )
-        return rslt
+        return self.create_chunks(text, file_path, splitter)
 
     def chunk_md(self, md: str, file_path: str) -> list[Chunk]:
         splitter: RecursiveCharacterTextSplitter = (
             RecursiveCharacterTextSplitter(
-                chunk_size=self.chunk_size * 0.75,
-                chunk_overlap=self.chunk_size * 0.10,
+                chunk_size=int(self.chunk_size * 0.75),
+                chunk_overlap=int(self.chunk_size * 0.10),
+                add_start_index=True,
                 separators=[
                     "#",
                     "##",
@@ -129,56 +147,25 @@ class Chunker:
                 ],
             )
         )
-        chunks: list[str] = splitter.split_text(md)
-        rslt: list[Chunk] = []
-        start = 0
-        for chunk in chunks:
-            first = md.find(chunk, start)
-            last = first + len(chunk)
-            start = last
-            rslt.append(
-                {
-                    "first_character_index": first,
-                    "last_character_index": last,
-                    "file_path": file_path,
-                    "text": chunk,
-                }
-            )
-        return rslt
+        return self.create_chunks(md, file_path, splitter)
 
     def chunk_code(self, code: str, file_path: str) -> list[Chunk]:
         tree = ast.parse(code)
-        chunks: list[str] = []
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
-                if len(ast.dump(node)) > self.chunk_size:
-                    splitter: RecursiveCharacterTextSplitter = (
-                        RecursiveCharacterTextSplitter(
-                            chunk_size=self.chunk_size * 0.75,
-                            chunk_overlap=self.chunk_size * 0.10,
-                            separators=[
-                                "\n\n",
-                                "\n",
-                                " ",
-                                "",
-                            ],
-                        )
-                    )
-                    chunks.extend(splitter.split_text(ast.dump(node)))
-                else:
-                    chunks.append(ast.dump(node))
         rslt: list[Chunk] = []
-        start = 0
-        for chunk in chunks:
-            first = code.find(chunk, start)
-            last = first + len(chunk)
-            start = last
-            rslt.append(
-                {
-                    "first_character_index": first,
-                    "last_character_index": last,
-                    "file_path": file_path,
-                    "text": chunk,
-                }
-            )
+
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=int(self.chunk_size * 0.75),
+            chunk_overlap=int(self.chunk_size * 0.10),
+            separators=["\n\n", "\n", " ", ""],
+        )
+
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                continue
+
+            segment = ast.get_source_segment(code, node)
+            if not segment:
+                continue
+
+            rslt.extend(self.create_chunks(segment, file_path, splitter))
         return rslt
