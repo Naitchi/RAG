@@ -11,5 +11,5 @@ dependencies = [
     "tqdm",
     "bm25s",
     "langchain-text-splitters",
-    "accelerate"
+    "ollama"
 ]

@@ -1,6 +1,7 @@
 moulinette_pkg/
 vllm-0.10.1/ 
 datasets_public/
+data/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

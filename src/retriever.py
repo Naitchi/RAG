@@ -1,6 +1,6 @@
 from typing import Any
-
-import bm25s  # type: ignore
+import bm25s
+import json
 
 
 class Retriever:
@@ -8,17 +8,23 @@ class Retriever:
         self.tokenized: Any = None
         self.retriver: Any = bm25s.BM25()
 
-    def tokenize_chunks(self, chunks: list[dict[str, str]]) -> None:
-        self.tokenized: Any = bm25s.tokenize(  # type: ignore
-            [chunk["chunk"] for chunk in chunks], stopwords="en"
-        )
-        self.retriver.index(self.tokenized)
+    def tokenize_chunks(self) -> None:
+        try:
+            with open("./data/processed/chunk/chunks.json", "r") as file:
+                chunks = json.load(file)
+            self.tokenized = bm25s.tokenize(
+                [chunk["text"] for chunk in chunks], stopwords="en"
+            )
+            self.retriver.index(self.tokenized)
+            self.retriver.save("data/processed/bm25_index")
+        except Exception as e:
+            print(f"Error in intokenize_chunks: {e}")
 
     def retrieve(self, prompt: str, k: int) -> Any:
-        if self.tokenized is None:
-            print("Erreur il me faut le tokenize des chunks")
-            return
-
-        tokenized_query: Any = bm25s.tokenize(prompt)  # type: ignore
-        result, score = self.retriver(tokenized_query, k)
-        print(result, score)
+        try:
+            self.retriver = bm25s.BM25.load("data/processed/bm25_index")
+            tokenized_query: Any = bm25s.tokenize(prompt)
+            result, score = self.retriver(tokenized_query, k)
+            print(result, score)
+        except Exception as e:
+            print(f"Error in retrieve: {e}")
