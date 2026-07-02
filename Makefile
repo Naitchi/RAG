@@ -1,10 +1,10 @@
 ARGS ?=
 
 install:
-	uv sync
-
+	uv sync  
+	
 run:
-	uv run src $(ARGS)
+	ollama serve & sleep 2 && uv run src $(ARGS)
 
 debug:
 	uv run python -m pdb $(ARGS)
