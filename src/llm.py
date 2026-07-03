@@ -1,5 +1,6 @@
 from typing import Any
 import ollama
+import json
 
 
 class Llm:
@@ -27,3 +28,21 @@ class Llm:
         )
         print(f"Response: {response['message']['content']}")
         return response["message"]["content"]
+
+    def answer_dataset(
+        self, student_search_result_path: str, save_directory: str
+    ) -> None:
+        try:
+            with open(student_search_result_path, "r") as file:
+                dataset = json.load(file)
+            for item in dataset:
+                prompt = item.get("prompt", "")
+                retrieved_chunks = item.get("retrieved_chunks", [])
+                answer = self.chat(prompt, retrieved_chunks)
+                item["answer"] = answer
+            output_path = f"{save_directory}/answered_dataset.json"
+            with open(output_path, "w") as outfile:
+                json.dump(dataset, outfile, indent=4)
+            print(f"Answered dataset saved to {output_path}")
+        except Exception as e:
+            print(f"Error in answer_dataset: {e}")

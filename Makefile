@@ -1,6 +1,12 @@
 ARGS ?=
 
-install:
+install-ollama:
+	curl -fsSL https://ollama.com/install.sh | sh
+
+pull-qwen:
+	ollama serve & sleep 2 && ollama pull qwen3:0.6b
+
+install: install-ollama pull-qwen 
 	uv sync  
 	
 run:
