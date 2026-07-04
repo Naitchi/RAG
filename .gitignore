@@ -1,7 +1,11 @@
 moulinette_pkg/
 vllm-0.10.1/ 
 datasets_public/
-data/
+data/processed/bm25_index/
+data/processed/chunk/
+search_results.json
+answered_results.json
+search_datasets_results.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

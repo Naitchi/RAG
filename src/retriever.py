@@ -2,6 +2,11 @@ from typing import Any
 import bm25s
 import json
 
+from pydantic_validation import (
+    UnansweredQuestion,
+    load_rag_dataset,
+)
+
 
 class Retriever:
     def __init__(self) -> None:
@@ -16,39 +21,38 @@ class Retriever:
             texts = [chunk["text"] for chunk in chunks]
             self.tokenized = bm25s.tokenize(texts, stopwords="en")
             self.retriver.index(self.tokenized)
-            self.retriver.save(self.index_path, corpus=texts)
+            self.retriver.save(self.index_path, corpus=chunks)
         except Exception as e:
             print(f"Error in intokenize_chunks: {e}")
 
-    def retrieve(self, prompt: str, k: int) -> Any:
+    def retrive(self, prompt: str, k: int) -> list[dict[str, Any]]:
         try:
-            self.retriver = bm25s.BM25.load(
-                "data/processed/bm25_index", load_corpus=True
-            )
+            self.retriver = bm25s.BM25.load(self.index_path, load_corpus=True)
             tokenized_query: Any = bm25s.tokenize(prompt)
-            result, score = self.retriver.retrieve(tokenized_query, k=k)
-            print(f"Retrieved {len(result)} chunks with scores: {score}")
+            result, _ = self.retriver.retrieve(tokenized_query, k=k)
             return result[0].tolist()
         except Exception as e:
             print(f"Error in retrieve: {e}")
 
-    def retrieve_from_dataset(self, dataset_path: str, k: int) -> Any:
+    def retrieve_from_dataset(
+        self, dataset_path: str, k: int
+    ) -> list[dict[str, Any]]:
         try:
             self.retriver = bm25s.BM25.load(self.index_path, load_corpus=True)
-            with open(dataset_path, "r") as file:
-                dataset = json.load(file)
-            results: list[dict[str, Any]] = []
-            for item in dataset:
-                prompt = item.get("prompt", "")
-                tokenized_query: Any = bm25s.tokenize(prompt)
-                result, score = self.retriver.retrieve(tokenized_query, k=k)
-                results.append(
+            prompt_dataset: list[str] = [
+                q.question
+                for q in load_rag_dataset(dataset_path).rag_questions
+            ]
+            data: list[dict[str, Any]] = []
+            tokenized_query: Any = bm25s.tokenize(prompt_dataset)
+            results_retrieve, _ = self.retriver.retrieve(tokenized_query, k=k)
+            for result, prompt in zip(results_retrieve, prompt_dataset):
+                data.append(
                     {
                         "prompt": prompt,
-                        "retrieved_chunks": [r.tolist() for r in result],
-                        "scores": score.tolist(),
+                        "retrieved_chunks": result.tolist(),
                     }
                 )
-            return results
+            return data
         except Exception as e:
             print(f"Error in retrieve_from_dataset: {e}")
