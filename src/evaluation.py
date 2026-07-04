@@ -1,6 +1,5 @@
-from typing import Any
-
 from pydantic_validation import MinimalSource
+from typing import Any
 
 
 class Evaluation:

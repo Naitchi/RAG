@@ -1,14 +1,11 @@
-from __future__ import annotations
-
-from typing import Any
-import ollama
-
 from pydantic_validation import (
     MinimalAnswer,
     StudentSearchResults,
     StudentSearchResultsAndAnswer,
     load_student_search_results,
 )
+from typing import Any
+import ollama
 
 
 class Llm:
@@ -85,13 +82,9 @@ class Llm:
                     )
                 )
 
-            output_dataset = StudentSearchResultsAndAnswer(
+            return StudentSearchResultsAndAnswer(
                 search_results=answered_results,
                 k=dataset.k,
             )
-            output_path = f"{save_directory}/answered_dataset.json"
-            with open(output_path, "w") as outfile:
-                outfile.write(output_dataset.model_dump_json(indent=4))
-            print(f"Answered dataset saved to {output_path}")
         except Exception as e:
             print(f"Error in answer_dataset: {e}")

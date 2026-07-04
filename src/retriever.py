@@ -1,11 +1,10 @@
-from typing import Any
-import bm25s
-import json
-
 from pydantic_validation import (
     UnansweredQuestion,
     load_rag_dataset,
 )
+from typing import Any
+import bm25s
+import json
 
 
 class Retriever:

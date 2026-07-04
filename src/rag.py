@@ -1,10 +1,9 @@
-import uuid
-
 from pydantic_validation import dump_model_json
 from retriever import Retriever
 from chunker import Chunker
 from typing import Any
 from llm import Llm
+import uuid
 import json
 import os
 
@@ -130,7 +129,7 @@ class RagSystem:
                             for source in item["retrieved_chunks"]
                         ],
                     }
-                    for i, item in enumerate(search_results)
+                    for item in search_results
                 ],
                 "k": k,
             }
@@ -144,34 +143,14 @@ class RagSystem:
         self, student_search_result_path: str, save_directory: str
     ) -> None:
         try:
+
             answer_results = self.llm.answer_dataset(
                 student_search_result_path=student_search_result_path,
                 save_directory=save_directory,
             )
-            json = {
-                "search_results": [
-                    {
-                        "question_id": str(uuid.uuid4()),
-                        "question": item["prompt"],
-                        "retrieved_sources": [
-                            {
-                                "file_path": source["file_path"],
-                                "first_character_index": source[
-                                    "first_character_index"
-                                ],
-                                "last_character_index": source[
-                                    "last_character_index"
-                                ],
-                            }
-                            for source in item["retrieved_chunks"]
-                        ],
-                    }
-                    for i, item in enumerate(answer_results)
-                ],
-                "k": answer_results["k"],
-            }
             self.save_as_json(
-                json, f"{save_directory}/answered_datasets_results.json"
+                answer_results,
+                f"{save_directory}/answered_datasets_results.json",
             )
         except Exception as e:
             print(f"Error in answer_dataset: {e}")
