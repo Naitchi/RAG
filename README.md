@@ -1,45 +1,182 @@
-# Readme Requirements
+*This project has been created as part of the 42 curriculum by bclairot.*
 
-A README.md file must be provided at the root of your Git repository. Its purpose is
-to allow anyone unfamiliar with the project (peers, staff, recruiters, etc.) to quickly
-understand what the project is about, how to run it, and where to find more information
-on the topic.
+# RAG
 
-The README.md must include at least:
+## Description
 
-• The very first line must be italicized and read: This project has been created as part
-of the 42 curriculum by <login1>[, <login2>[, <login3>[...]]].
+This project implements a Retrieval-Augmented Generation pipeline over a local snapshot of vLLM 0.10.1. The goal is to ingest documentation and source code, split it into searchable chunks, build a BM25 index, retrieve the most relevant passages for a question, and optionally generate an answer with a local Ollama model.
 
-• A “Description” section that clearly presents the project, including its goal and a
-brief overview.
+The repository is structured around a fully local workflow:
 
-• An “Instructions” section containing any relevant information about compilation,
-installation, and/or execution.
+- raw material lives in `data/raw/vllm-0.10.1`
+- processed chunks and indexes are stored in `data/processed`
+- datasets for evaluation are stored in `data/datasets`
 
-• A “Resources” section listing classic references related to the topic (documen-
-tation, articles, tutorials, etc.), as well as a description of how AI was used —
-specifying for which tasks and which parts of the project.
+## Instructions
 
-➠ Additional sections may be required depending on the project (e.g., usage
-examples, feature list, technical choices, etc.).
+### Requirements
 
-Any required additions will be explicitly listed below.
+- Python 3.10 or newer
+- `uv`
+- Ollama installed locally
+- the `qwen3:0.6b` model pulled in Ollama
 
-For this project, the README.md must also include:
+### Installation
 
-• System architecture: Describe your RAG pipeline components and how they
-interact
+```bash
+make install
+```
 
-• Chunking strategy: Explain your approach to document segmentation
+This installs the Python dependencies, starts the Ollama installation flow, and pulls `qwen3:0.6b`.
 
-• Retrieval method: Detail the retrieval algorithm and ranking mechanism
+If you prefer manual setup:
 
-• Performance analysis: Discuss recall@k scores and system performance
+```bash
+uv sync
+ollama pull qwen3:0.6b
+```
 
-• Design decisions: Explain key implementation choices
+### Execution
 
-• Challenges faced: Document difficulties encountered and solutions
+The Makefile starts Ollama and forwards arguments to the CLI:
 
-• Example usage: Provide clear examples of running your system
+```bash
+make run ARGS="index"
+```
 
-Your README must be written in English.
+You can also run the package directly:
+
+```bash
+uv run python -m src index
+```
+
+## System architecture
+
+The RAG pipeline is made of four main components:
+
+- `Chunker`: reads the vLLM source tree and splits files into smaller searchable chunks
+- `Retriever`: loads the BM25 index and finds the most relevant chunks for a user question
+- `LLM`: sends the retrieved chunks to Ollama and generates the final answer
+- `Evaluation`: compares retrieved chunks with the reference datasets and computes recall@k
+
+They interact in this order:
+
+1. The chunker scans `data/raw/vllm-0.10.1` and writes chunk metadata to `data/processed/chunk/chunks.json`.
+2. The retriever builds a BM25 index from those chunks and uses it to search for relevant passages.
+3. The LLM receives the top chunks as context and produces an answer.
+4. The evaluation step reuses the same retrieval output to measure recall@k on the public datasets.
+
+## Chunking Strategy
+
+The chunker uses different strategies depending on the file type:
+
+- plain text and reStructuredText files are segmented with `RecursiveCharacterTextSplitter`
+- Markdown files use heading-aware separators so sections stay semantically meaningful
+- Python files are parsed with `ast`, and each function or class definition becomes a candidate chunk
+
+Implementation details:
+
+- default chunk size is 2000 characters
+- chunk overlap is 10 percent of the base chunk size
+- the splitter uses smaller working chunks internally (`chunk_size = 75 percent of the base size`)
+- chunks shorter than 10 percent of the base size are discarded
+- whitespace and punctuation spacing are normalized before saving
+
+Each chunk keeps its source file path and character range so retrieval results can be traced back to the original document.
+
+## Retrieval Method
+
+Retrieval is based on BM25 through the `bm25s` library.
+
+- chunk texts are tokenized with English stop words
+- the index is saved to `data/processed/bm25_index`
+- queries are tokenized with the same BM25 pipeline
+- results are ranked by BM25 score and the top `k` chunks are returned
+
+This choice keeps the system lightweight, fast, and easy to reproduce without requiring embeddings or a vector database.
+
+## Performance Analysis
+
+Recall@k was computed on the public answered datasets using the current index in `data/processed/bm25_index`.
+
+### Code dataset, 100 questions
+<!-- TODO  mettre les vrai valeurs --> 
+- Recall@1: 0.020
+- Recall@3: 0.050
+- Recall@5: 0.070
+- Recall@10: 0.080
+
+### Documentation dataset, 100 questions
+
+- Recall@1: 0.630
+- Recall@3: 0.760
+- Recall@5: 0.840
+- Recall@10: 0.870
+
+The system performs much better on documentation than on code. That gap is expected: code questions often depend on symbolic names, implementation details, or local context that lexical BM25 matching does not always surface at rank 1.
+
+## Design Decisions
+
+- BM25 was chosen instead of dense embeddings to keep indexing simple, explainable, and fast on a local corpus.
+- AST-based chunking for Python files preserves code structure better than naive fixed-width splitting.
+- Source offsets are stored with each chunk so retrieved passages can be audited against the original file.
+- Pydantic models validate dataset and output formats before evaluation.
+- Fire provides a small CLI surface without adding a custom argument parser.
+- Ollama keeps generation local and avoids any external API dependency.
+
+## Challenges Faced
+
+- The project subject was really dense and unclear, which made it hard to understand what was expected
+- Code chunks are harder to evaluate than prose because exact source overlap is sensitive to chunk boundaries.
+- Some questions map to multiple possible code regions, which makes sparse retrieval more brittle.
+- The pipeline must keep file paths and character offsets consistent across chunking, indexing, and evaluation.
+- Mixing prose and code required different chunking strategies to avoid losing semantic structure.
+
+The main fix was to preserve metadata at chunk creation time and reuse the same chunk records during retrieval and evaluation.
+
+## Example Usage
+
+### Build the index
+
+```bash
+make run ARGS="index"
+```
+
+### Search for relevant chunks
+
+```bash
+make run ARGS="search --query='What is the default value of trust_remote_code in vLLM's LLM class constructor?' --k=5"
+```
+
+### Generate an answer
+
+```bash
+make run ARGS="answer --query='What hardware platforms does vLLM support?' --k=5"
+```
+
+### Evaluate retrieval
+
+```bash
+make run ARGS="evaluate --student_answer_path=data/processed/output/answered_datasets_results.json --dataset_path=data/datasets/AnsweredQuestions/dataset_docs_public.json --k=10 --max_context_length=2000"
+```
+
+### Process a dataset
+
+```bash
+make run ARGS="search_dataset data/datasets/UnansweredQuestions/dataset_docs_public.json 10 data/processed/output"
+```
+
+## Resources
+
+### References
+
+- vLLM documentation: https://docs.vllm.ai/
+- BM25 background: https://en.wikipedia.org/wiki/Okapi_BM25
+- bm25s project: https://github.com/xhluca/bm25s
+- LangChain text splitters: https://python.langchain.com/docs/concepts/text_splitters/
+- Ollama documentation: https://ollama.com/
+- Pydantic documentation: https://docs.pydantic.dev/
+
+### AI Usage
+
+AI was used to help write a first draft and structure this README, and to help with documentation on the libraries.
