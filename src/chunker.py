@@ -88,17 +88,11 @@ class Chunker:
                     if content.strip() == "":
                         continue
                     if file.suffix == ".txt" or file.suffix == ".rst":
-                        chunks.extend(
-                            self.chunk_text(content, str(file.resolve()))
-                        )
+                        chunks.extend(self.chunk_text(content, str(file)))
                     elif file.suffix == ".md":
-                        chunks.extend(
-                            self.chunk_md(content, str(file.resolve()))
-                        )
+                        chunks.extend(self.chunk_md(content, str(file)))
                     elif file.suffix == ".py":
-                        chunks.extend(
-                            self.chunk_code(content, str(file.resolve()))
-                        )
+                        chunks.extend(self.chunk_code(content, str(file)))
 
         chunks = self.format_chunks(chunks)
         file_path = "data/processed/chunk/chunks.json"

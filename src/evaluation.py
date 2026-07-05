@@ -1,3 +1,5 @@
+import os
+
 from pydantic_validation import (
     AnsweredQuestion,
     MinimalSource,
@@ -44,22 +46,21 @@ class Evaluation:
         dataset: RagDataset,
         k: int,
     ) -> float:
-        correct_questions = {q.question: q for q in dataset.rag_questions}
+        correct_sources: dict[str, list] = {
+            q.question: q.sources
+            for q in dataset.rag_questions
+            if isinstance(q, AnsweredQuestion)
+        }
 
         total_recall = 0.0
         evaluated = 0
 
         for result in student_answers.search_results:
-            correct_question = correct_questions.get(result.question)
-            print(
-                f"\nEvaluating question: {result},\n test {correct_question}"
-            )
-            if correct_question is None:
+            if result.question not in correct_sources:
                 continue
 
-            correct = correct_question.sources
+            correct = correct_sources[result.question]
             retrieved = result.retrieved_sources[:k]
-            print(f"{correct}, {retrieved}")
 
             found = 0
             for correct_source in correct:
@@ -79,10 +80,11 @@ class Evaluation:
         retrieved: MinimalSource,
         threshold: float = 0.05,
     ) -> bool:
-        if correct.file_path != retrieved.file_path:
+        # TODO delete ca c'est inutile mnt que j'ai modifier le chunker
+        retrieved_path = os.path.relpath(retrieved.file_path)
+        if correct.file_path != retrieved_path:
             return False
 
-        # Calcul du chevauchement entre les deux intervalles
         overlap_start = max(
             correct.first_character_index, retrieved.first_character_index
         )
