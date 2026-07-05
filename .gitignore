@@ -6,6 +6,7 @@ data/processed/chunk/
 search_results.json
 answered_results.json
 search_datasets_results.json
+answered_datasets_results.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -1,5 +1,5 @@
-from pydantic import BaseModel, ConfigDict, Field
-from typing import List
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from typing import Any, List, Optional
 import uuid
 
 
@@ -9,7 +9,8 @@ class MinimalSource(BaseModel):
     file_path: str
     first_character_index: int
     last_character_index: int
-    text: str  # TODO a voir y'a un grand monde ou ca me casse pas mal de trucs
+    # TODO a voir y'a un grand monde ou ca me casse pas mal de trucs
+    text: Optional[str] = None
 
 
 class UnansweredQuestion(BaseModel):
@@ -21,15 +22,42 @@ class UnansweredQuestion(BaseModel):
 
 class AnsweredQuestion(UnansweredQuestion):
     model_config = ConfigDict(extra="ignore")
-
     sources: List[MinimalSource]
     answer: str
 
 
 class RagDataset(BaseModel):
     model_config = ConfigDict(extra="ignore")
-
     rag_questions: List[AnsweredQuestion | UnansweredQuestion]
+
+    @model_validator(mode="before")
+    @classmethod
+    def parse_questions(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "rag_questions" in data:
+            parsed = []
+            for q in data["rag_questions"]:
+                if "sources" in q and "answer" in q:
+                    parsed.append(
+                        AnsweredQuestion(
+                            **{
+                                k: v
+                                for k, v in q.items()
+                                if k in AnsweredQuestion.model_fields
+                            }
+                        )
+                    )
+                else:
+                    parsed.append(
+                        UnansweredQuestion(
+                            **{
+                                k: v
+                                for k, v in q.items()
+                                if k in UnansweredQuestion.model_fields
+                            }
+                        )
+                    )
+            data["rag_questions"] = parsed
+        return data
 
 
 class MinimalSearchResults(BaseModel):
@@ -67,7 +95,3 @@ def load_rag_dataset(dataset_path: str) -> RagDataset:
 def load_student_search_results(dataset_path: str) -> StudentSearchResults:
     with open(dataset_path, "r") as file:
         return StudentSearchResults.model_validate_json(file.read())
-
-
-def dump_model_json(model: BaseModel) -> str:
-    return model.model_dump_json(indent=4)

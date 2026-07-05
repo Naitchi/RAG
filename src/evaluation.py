@@ -1,100 +1,166 @@
-from pydantic_validation import MinimalSource
-from typing import Any
+from pydantic_validation import (
+    AnsweredQuestion,
+    MinimalSource,
+    RagDataset,
+    StudentSearchResults,
+)
 
 
 class Evaluation:
-
     def __init__(self) -> None:
         pass
 
-    @staticmethod
-    def calculate_overlap(
-        source1: dict[str, Any], source2: dict[str, Any]
-    ) -> float:
-        """Calculate character overlap between two sources."""
-        start1 = source1["first_character_index"]
-        end1 = source1["last_character_index"]
-        start2 = source2["first_character_index"]
-        end2 = source2["last_character_index"]
+    def check_chunk_length(
+        self, chunk_size: int, chunks: list[MinimalSource]
+    ) -> bool:
+        for chunk in chunks:
+            if (
+                chunk.last_character_index - chunk.first_character_index
+                > chunk_size
+            ):
+                return False
+        return True
 
-        overlap_start = max(start1, start2)
-        overlap_end = min(end1, end2)
-        overlap = max(0, overlap_end - overlap_start)
+    def check_number_answers_with_sources(
+        self, list_questions: list, student: bool = False
+    ) -> int:
+        count = 0
+        if student:
+            for question in list_questions:
+                if len(question.retrieved_sources) > 0:
+                    count += 1
+            return count
+        for question in list_questions:
+            if (
+                isinstance(question, AnsweredQuestion)
+                and len(question.sources) > 0
+            ):
+                count += 1
+        return count
 
-        source2_length = end2 - start2
-        if source2_length == 0:
-            return 0.0
-        return overlap / source2_length
-
-    def is_source_found(
+    def calculate_recall(
         self,
-        retrieved: dict[str, Any],
-        correct: dict[str, Any],
+        student_answers: StudentSearchResults,
+        dataset: RagDataset,
+        k: int,
+    ) -> float:
+        correct_questions = {q.question: q for q in dataset.rag_questions}
+
+        total_recall = 0.0
+        evaluated = 0
+
+        for result in student_answers.search_results:
+            correct_question = correct_questions.get(result.question)
+            print(
+                f"\nEvaluating question: {result},\n test {correct_question}"
+            )
+            if correct_question is None:
+                continue
+
+            correct = correct_question.sources
+            retrieved = result.retrieved_sources[:k]
+            print(f"{correct}, {retrieved}")
+
+            found = 0
+            for correct_source in correct:
+                for retrieved_source in retrieved:
+                    if self._has_overlap(correct_source, retrieved_source):
+                        found += 1
+                        break
+
+            total_recall += found / len(correct) if correct else 0.0
+            evaluated += 1
+
+        return round(total_recall / evaluated, 3) if evaluated > 0 else 0.0
+
+    def _has_overlap(
+        self,
+        correct: MinimalSource,
+        retrieved: MinimalSource,
         threshold: float = 0.05,
     ) -> bool:
-        """Check if retrieved source overlaps with correct source by threshold."""
-        if retrieved["file_path"] != correct["file_path"]:
+        if correct.file_path != retrieved.file_path:
             return False
-        return self.calculate_overlap(retrieved, correct) >= threshold
 
-    def recall_at_k(
-        self,
-        retrieved_sources: list[dict[str, Any] | MinimalSource],
-        correct_sources: list[dict[str, Any] | MinimalSource],
-    ) -> float:
-        """
-        Calculate recall@k: fraction of correct sources found in retrieved.
+        # Calcul du chevauchement entre les deux intervalles
+        overlap_start = max(
+            correct.first_character_index, retrieved.first_character_index
+        )
+        overlap_end = min(
+            correct.last_character_index, retrieved.last_character_index
+        )
+        overlap = max(0, overlap_end - overlap_start)
 
-        A source is found if it has >= 5% overlap with any correct source.
-        """
-        if not correct_sources:
-            return 1.0
+        correct_len = (
+            correct.last_character_index - correct.first_character_index
+        )
+        if correct_len == 0:
+            return False
 
-        retrieved_dicts = [
-            s.model_dump() if isinstance(s, MinimalSource) else s
-            for s in retrieved_sources
-        ]
-        correct_dicts = [
-            s.model_dump() if isinstance(s, MinimalSource) else s
-            for s in correct_sources
-        ]
-
-        found_count = 0
-        for correct in correct_dicts:
-            for retrieved in retrieved_dicts:
-                if self.is_source_found(retrieved, correct):
-                    found_count += 1
-                    break
-
-        return found_count / len(correct_dicts)
+        return (overlap / correct_len) >= threshold
 
     def evaluate_dataset(
         self,
-        dataset: list[dict[str, Any]],
-        k_values: list[int] = [1, 3, 5, 10],
+        student_answer_path: str,
+        dataset_path: str,
+        k: int,
+        max_context_length: int,
     ) -> dict[str, float]:
-        """
-        Evaluate dataset and compute recall@k for each k.
-        Dataset items must have:
-        - sources: list of correct sources
-        - retrieved_sources: list of retrieved sources
-        """
-        results = {f"recall@{k}": 0.0 for k in k_values}
-        count = 0
+        try:
+            with open(student_answer_path, "r") as f:
+                student_answers = StudentSearchResults.model_validate_json(
+                    f.read()
+                )
 
-        for item in dataset:
-            correct = item.get("sources", [])
-            if not correct:
-                continue
+            with open(dataset_path, "r") as f:
+                dataset = RagDataset.model_validate_json(f.read())
+            if k not in [1, 3, 5, 10]:
+                raise ValueError("k must be one of [1, 3, 5, 10]")
+            chunks = [
+                source
+                for item in student_answers.search_results
+                for source in item.retrieved_sources
+            ]
 
-            for k in k_values:
-                retrieved = item.get("retrieved_sources", [])[:k]
-                score = self.recall_at_k(retrieved, correct)
-                results[f"recall@{k}"] += score
-            count += 1
+            print(
+                "Student data is valid: "
+                f"{self.check_chunk_length(max_context_length, chunks)}"
+            )
+            print(f"Total number of questions: {len(dataset.rag_questions)}")
+            print(
+                "Total number of questions with sources: "
+                f"{self.check_number_answers_with_sources(
+                    dataset.rag_questions)}"
+            )
+            print(
+                "Total number of questions with student sources: "
+                f"{self.check_number_answers_with_sources(
+                    student_answers.search_results, True)}"
+            )
 
-        if count > 0:
-            for key in results:
-                results[key] /= count
-
-        return results
+            print("\nEvaluation Results")
+            print("========================================")
+            print(
+                f"Questions evaluated: {len(student_answers.search_results)}"
+            )
+            print(
+                "Recall@1: "
+                f"{self.calculate_recall(student_answers, dataset, k=1)}"
+            )
+            if k > 1:
+                print(
+                    "Recall@3: "
+                    f"{self.calculate_recall(student_answers, dataset, k=3)}"
+                )
+            if k > 3:
+                print(
+                    "Recall@5: "
+                    f"{self.calculate_recall(student_answers, dataset, k=5)}"
+                )
+            if k > 5:
+                print(
+                    "Recall@10: "
+                    f"{self.calculate_recall(student_answers, dataset, k=10)}"
+                )
+        except Exception as e:
+            raise Exception(f"Error in evaluate_dataset: {e}")

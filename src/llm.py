@@ -13,32 +13,37 @@ class Llm:
         self.model = "qwen3:0.6b"
 
     def chat(self, prompt: str, context: list[dict]) -> Any:
-        formatted_context = "\n\n".join(
-            [
-                f"Document {i+1}:\n{doc}"
-                for i, doc in enumerate(element["text"] for element in context)
-            ]
-        )
-        m = f"""Answer the question based on the following context.
+        try:
+            formatted_context = "\n\n".join(
+                [
+                    f"Document {i+1}:\n{doc}"
+                    for i, doc in enumerate(
+                        element["text"] for element in context
+                    )
+                ]
+            )
+            m = f"""Answer the question based on the following context.
 
-        <context>
-        {formatted_context}
-        </context>
+            <context>
+            {formatted_context}
+            </context>
 
-        <question>
-        {prompt}
-        </question>"""
+            <question>
+            {prompt}
+            </question>"""
 
-        response = ollama.chat(
-            model=self.model,
-            messages=[{"role": "user", "content": m}],
-            options={"num_ctx": 4096, "temperature": 0.2},
-        )
-        print(f"Response: {response['message']['content']}")
-        return {
-            "retrieved_chunks": context,
-            "answer": response["message"]["content"],
-        }
+            response = ollama.chat(
+                model=self.model,
+                messages=[{"role": "user", "content": m}],
+                options={"num_ctx": 4096, "temperature": 0.2},
+            )
+            print(f"Response: {response['message']['content']}")
+            return {
+                "retrieved_chunks": context,
+                "answer": response["message"]["content"],
+            }
+        except Exception as e:
+            raise Exception(f"Error in chat: {e}")
 
     def answer_dataset(
         self, student_search_result_path: str, save_directory: str
@@ -81,10 +86,9 @@ class Llm:
                         answer=response["message"]["content"],
                     )
                 )
-
             return StudentSearchResultsAndAnswer(
                 search_results=answered_results,
                 k=dataset.k,
             )
         except Exception as e:
-            print(f"Error in answer_dataset: {e}")
+            raise Exception(f"Error in answer_dataset: {e}")

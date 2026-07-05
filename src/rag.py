@@ -1,5 +1,6 @@
-from pydantic_validation import dump_model_json
+from evaluation import Evaluation
 from retriever import Retriever
+from pydantic import BaseModel
 from chunker import Chunker
 from typing import Any
 from llm import Llm
@@ -13,15 +14,19 @@ class RagSystem:
         self.chunker = Chunker(vllm_path="./data/raw/vllm-0.10.1")
         self.retriever = Retriever()
         self.llm = Llm()
+        self.evaluater = Evaluation()
 
     def save_as_json(self, data: Any, file_path: str) -> None:
         try:
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, "w") as f:
-                json.dump(data, f, indent=4)
+                if isinstance(data, BaseModel):
+                    json.dump(data.model_dump(), f, indent=4)
+                else:
+                    json.dump(data, f, indent=4)
             print(f"Data saved to {file_path}")
         except Exception as e:
-            print(f"Error saving data to {file_path}: {e}")
+            raise Exception(f"Error saving data to {file_path}: {e}")
 
     def index(self, max_chunk_size: int = 2000) -> None:
         try:
@@ -66,6 +71,7 @@ class RagSystem:
             )
         except Exception as e:
             print(f"Error in search: {e}")
+            return
 
     def answer(self, query: str, k: int = 10) -> None:
         try:
@@ -75,7 +81,7 @@ class RagSystem:
             json = {
                 "search_results": [
                     {
-                        "question_id": "q1",
+                        "question_id": "q1",  # TODO take the question_id from the dataset if it exists
                         "question": query,
                         "retrieved_sources": [
                             {
@@ -99,6 +105,7 @@ class RagSystem:
             )
         except Exception as e:
             print(f"Error in answer: {e}")
+            return
 
     def search_dataset(
         self,
@@ -113,7 +120,12 @@ class RagSystem:
             json = {
                 "search_results": [
                     {
-                        "question_id": str(uuid.uuid4()),
+                        "question_id": item.get(
+                            "question_id",
+                            str(
+                                uuid.uuid4()
+                            ),  # TODO take the question_id from the dataset if it exists
+                        ),
                         "question": item["prompt"],
                         "retrieved_sources": [
                             {
@@ -138,6 +150,7 @@ class RagSystem:
             )
         except Exception as e:
             print(f"Error in search_dataset: {e}")
+            return
 
     def answer_dataset(
         self, student_search_result_path: str, save_directory: str
@@ -152,8 +165,25 @@ class RagSystem:
                 answer_results,
                 f"{save_directory}/answered_datasets_results.json",
             )
+            # TODO recheck car dans le terminal ca se termine pas
         except Exception as e:
             print(f"Error in answer_dataset: {e}")
+            return
 
-    def evaluate(self) -> None:
-        pass
+    def evaluate(
+        self,
+        student_answer_path: str,
+        dataset_path: str,
+        k: int = 10,
+        max_context_length: int = 2000,
+    ) -> None:
+        try:
+            self.evaluater.evaluate_dataset(
+                student_answer_path=student_answer_path,
+                dataset_path=dataset_path,
+                k=k,
+                max_context_length=max_context_length,
+            )
+        except Exception as e:
+            print(f"Error in evaluate: {e}")
+            return

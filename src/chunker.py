@@ -58,12 +58,6 @@ class Chunker:
             cleaned_chunks.append(chunk)
         return cleaned_chunks
 
-    def check_chunk_length(self, chunks: list[Chunk]) -> bool:
-        for chunk in chunks:
-            if len(chunk["text"]) > self.chunk_size:
-                return False
-        return True
-
     def format_chunks(self, chunks: list[Chunk]) -> list[Chunk]:
         formated: list[Chunk] = [
             {
@@ -107,10 +101,6 @@ class Chunker:
                         )
 
         chunks = self.format_chunks(chunks)
-        print(
-            f"Everything is under {self.chunk_size}"
-            f" char: {self.check_chunk_length(chunks)}"
-        )
         file_path = "data/processed/chunk/chunks.json"
         dir_path = os.path.dirname(file_path)
         os.makedirs(dir_path, exist_ok=True)
