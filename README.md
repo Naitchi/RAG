@@ -89,6 +89,7 @@ Each chunk keeps its source file path and character range so retrieval results c
 Retrieval is based on BM25 through the `bm25s` library.
 
 - chunk texts are tokenized with English stop words
+- the index uses the `robertson` BM25 variant with `k1=1.5` and `b=0.5`, tuned via testing different variants against the public docs and code datasets (the `bm25s` defaults are `method="lucene"`, `b=0.75`); a lower `b` reduces the length-normalization penalty, which matters here since code chunks vary far more in size (a few lines vs. a full class body) than typical text corpora
 - the index is saved to `data/processed/bm25_index`
 - queries are tokenized with the same BM25 pipeline
 - results are ranked by BM25 score and the top `k` chunks are returned
@@ -100,20 +101,20 @@ This choice keeps the system lightweight, fast, and easy to reproduce without re
 Recall@k was computed on the public answered datasets using the current index in `data/processed/bm25_index`.
 
 ### Code dataset, 100 questions
-<!-- TODO  mettre les vrai valeurs --> 
-- Recall@1: 0.020
-- Recall@3: 0.050
-- Recall@5: 0.070
-- Recall@10: 0.080
+
+- Recall@1: 0.29
+- Recall@3: 0.43
+- Recall@5: 0.51
+- Recall@10: 0.56
 
 ### Documentation dataset, 100 questions
 
-- Recall@1: 0.630
-- Recall@3: 0.760
-- Recall@5: 0.840
-- Recall@10: 0.870
+- Recall@1: 0.61
+- Recall@3: 0.77
+- Recall@5: 0.84
+- Recall@10: 0.89
 
-The system performs much better on documentation than on code. That gap is expected: code questions often depend on symbolic names, implementation details, or local context that lexical BM25 matching does not always surface at rank 1.
+Both datasets clear the required thresholds (80% recall@5 for docs, 50% for code). The system still performs better on documentation than on code: code questions are often phrased in natural language while the matching chunk is dense with symbolic names, so lexical BM25 matching has a narrower vocabulary overlap to work with than on prose.
 
 ## Design Decisions
 
@@ -139,31 +140,62 @@ The main fix was to preserve metadata at chunk creation time and reuse the same 
 ### Build the index
 
 ```bash
-make run ARGS="index"
+make run ARGS="index --max_chunk_size 2000"
+# ou
+uv run python -m src index --max_chunk_size 2000
 ```
 
-### Search for relevant chunks
+### Search for relevant chunks (single query)
 
 ```bash
-make run ARGS="search --query='What is the default value of trust_remote_code in vLLM's LLM class constructor?' --k=5"
+make run ARGS="search 'What is the default value of trust_remote_code in vLLM's LLM class constructor?' --k 5"
+# ou
+uv run python -m src search "What is the default value of trust_remote_code in vLLM's LLM class constructor?" --k 5
 ```
 
-### Generate an answer
+### Generate an answer (single query)
 
 ```bash
-make run ARGS="answer --query='What hardware platforms does vLLM support?' --k=5"
+make run ARGS="answer 'What hardware platforms does vLLM support?' --k 5"
+# ou
+uv run python -m src answer "What hardware platforms does vLLM support?" --k 5
+```
+
+### Search over a whole dataset
+
+Always scope `--save_directory` by dataset (`UnansweredQuestions` or `AnsweredQuestions`), since the public datasets share file names across the two folders.
+
+```bash
+make run ARGS="search_dataset --dataset_path data/datasets/UnansweredQuestions/dataset_docs_public.json --k 10 --save_directory data/output/search_results/UnansweredQuestions"
+# ou
+uv run python -m src search_dataset \
+  --dataset_path data/datasets/UnansweredQuestions/dataset_docs_public.json \
+  --k 10 \
+  --save_directory data/output/search_results/UnansweredQuestions
+```
+
+### Generate answers for a dataset
+
+```bash
+make run ARGS="answer_dataset --student_search_results_path data/output/search_results/UnansweredQuestions/dataset_docs_public.json --save_directory data/output/search_results_and_answer/UnansweredQuestions"
+# ou
+uv run python -m src answer_dataset \
+  --student_search_results_path data/output/search_results/UnansweredQuestions/dataset_docs_public.json \
+  --save_directory data/output/search_results_and_answer/UnansweredQuestions
 ```
 
 ### Evaluate retrieval
 
-```bash
-make run ARGS="evaluate --student_answer_path=data/processed/output/answered_datasets_results.json --dataset_path=data/datasets/AnsweredQuestions/dataset_docs_public.json --k=10 --max_context_length=2000"
-```
-
-### Process a dataset
+`--student_search_results_path` points to the output of `search_dataset` (not `answer_dataset`); `--dataset_path` points to the matching `AnsweredQuestions` ground-truth file.
 
 ```bash
-make run ARGS="search_dataset data/datasets/UnansweredQuestions/dataset_docs_public.json 10 data/processed/output"
+make run ARGS="evaluate --student_search_results_path data/output/search_results/UnansweredQuestions/dataset_docs_public.json --dataset_path data/datasets/AnsweredQuestions/dataset_docs_public.json --k 10 --max_context_length 2000"
+# ou
+uv run python -m src evaluate \
+  --student_search_results_path data/output/search_results/UnansweredQuestions/dataset_docs_public.json \
+  --dataset_path data/datasets/AnsweredQuestions/dataset_docs_public.json \
+  --k 10 \
+  --max_context_length 2000
 ```
 
 ## Resources

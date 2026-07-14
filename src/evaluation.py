@@ -1,6 +1,5 @@
-import os
-
-from pydantic_validation import (
+from typing import List
+from .pydantic_validation import (
     AnsweredQuestion,
     MinimalSource,
     RagDataset,
@@ -9,12 +8,12 @@ from pydantic_validation import (
 
 
 class Evaluation:
-    def __init__(self) -> None:
-        pass
+    """Computes recall@k for a student's retrieval output, for local use."""
 
     def check_chunk_length(
         self, chunk_size: int, chunks: list[MinimalSource]
     ) -> bool:
+        """Return False if any source spans more than `chunk_size` chars."""
         for chunk in chunks:
             if (
                 chunk.last_character_index - chunk.first_character_index
@@ -26,6 +25,19 @@ class Evaluation:
     def check_number_answers_with_sources(
         self, list_questions: list, student: bool = False
     ) -> int:
+        """Count questions that have at least one attached source.
+
+        Args:
+            list_questions: Either `AnsweredQuestion` (ground truth) or
+                `MinimalSearchResults` (student output) items, depending
+                on `student`.
+            student: If True, count `retrieved_sources` on student
+                results; otherwise count `sources` on ground-truth
+                `AnsweredQuestion` items.
+
+        Returns:
+            The number of questions with at least one source.
+        """
         count = 0
         if student:
             for question in list_questions:
@@ -46,7 +58,23 @@ class Evaluation:
         dataset: RagDataset,
         k: int,
     ) -> float:
-        correct_sources: dict[str, list] = {
+        """Compute recall@k, averaged over every matched question.
+
+        For each question, recall is the share of its ground-truth
+        sources found (via `_has_overlap`) among the student's top-k
+        retrieved sources. Questions are matched between `student_answers`
+        and `dataset` by their `question` text.
+
+        Args:
+            student_answers: The student's retrieval output.
+            dataset: The ground-truth dataset (`AnsweredQuestion` entries).
+            k: Number of top retrieved sources to consider per question.
+
+        Returns:
+            The mean per-question recall, rounded to 3 decimals, or 0.0
+            if no question could be matched.
+        """
+        correct_sources: dict[str, List] = {
             q.question: q.sources
             for q in dataset.rag_questions
             if isinstance(q, AnsweredQuestion)
@@ -80,9 +108,14 @@ class Evaluation:
         retrieved: MinimalSource,
         threshold: float = 0.05,
     ) -> bool:
-        # TODO delete ca c'est inutile mnt que j'ai modifier le chunker
-        retrieved_path = os.path.relpath(retrieved.file_path)
-        if correct.file_path != retrieved_path:
+        """Return True if `retrieved` counts as a match for `correct`.
+
+        A match requires the same `file_path` and a character-range
+        overlap of at least `threshold` of the ground-truth span's
+        length (IoU-style, relative to `correct`'s length only).
+        """
+
+        if correct.file_path != retrieved.file_path:
             return False
 
         overlap_start = max(
@@ -99,17 +132,29 @@ class Evaluation:
         if correct_len == 0:
             return False
 
-        return (overlap / correct_len) >= threshold
+        return bool((overlap / correct_len) >= threshold)
 
     def evaluate_dataset(
         self,
-        student_answer_path: str,
+        student_search_results_path: str,
         dataset_path: str,
         k: int,
         max_context_length: int,
-    ) -> dict[str, float]:
+    ) -> None:
+        """Load a student output and a ground-truth dataset and print recall@k.
+
+        Args:
+            student_search_results_path: Path to a `StudentSearchResults`
+                JSON file (typically the output of `search_dataset`).
+            dataset_path: Path to the matching `AnsweredQuestions`
+                ground-truth JSON file.
+            k: Highest k to report; recall is printed for every value in
+                [1, 3, 5, 10] up to `k`.
+            max_context_length: Maximum allowed source length in
+                characters, used to validate the student output.
+        """
         try:
-            with open(student_answer_path, "r") as f:
+            with open(student_search_results_path, "r") as f:
                 student_answers = StudentSearchResults.model_validate_json(
                     f.read()
                 )
@@ -165,4 +210,5 @@ class Evaluation:
                     f"{self.calculate_recall(student_answers, dataset, k=10)}"
                 )
         except Exception as e:
-            raise Exception(f"Error in evaluate_dataset: {e}")
+            print(f"Error in evaluate_dataset: {e}")
+            return

@@ -1,13 +1,11 @@
 moulinette_pkg/
-vllm-0.10.1/ 
-datasets_public/
+vllm-0.10.1/
+data/raw/*.zip
 data/processed/bm25_index/
 data/processed/chunk/
-search_results.json
-answered_results.json
-search_datasets_results.json
-answered_datasets_results.json
+data/output/**/*.json
 
+.claude/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

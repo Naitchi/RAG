@@ -4,13 +4,13 @@ install-ollama:
 	curl -fsSL https://ollama.com/install.sh | sh
 
 pull-qwen:
-	ollama serve & sleep 2 && ollama pull qwen3:0.6b
+	ollama serve 2>/dev/null & sleep 2 && ollama pull qwen3:0.6b
 
 install: install-ollama pull-qwen 
 	uv sync  
 	
 run:
-	ollama serve & sleep 2 && uv run src $(ARGS)
+	ollama serve 2>/dev/null & sleep 2 && uv run python -m src $(ARGS)
 
 debug:
 	uv run python -m pdb $(ARGS)
@@ -23,8 +23,8 @@ fclean: clean
 	rm -rf .venv/
 
 lint:
-	uv run flake8 .
-	uv run mypy . --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
+	uv run flake8 src
+	uv run mypy src --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
 
 lint-strict:
 	uv run flake8 .
