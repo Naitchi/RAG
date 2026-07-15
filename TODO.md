@@ -1,4 +1,4 @@
-utiliser tqdm pour faire une barre de telechargement.
-revoir tout les pydantics
-voir le recall@k
-lint
+voir pour ne plus utiliser Ollama
+Corriger les erreurs SonarQube
+Refaire toute les commandes pour tester le projets
+revoir les securite si une fonction random crash

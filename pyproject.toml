@@ -13,3 +13,6 @@ dependencies = [
     "langchain-text-splitters",
     "ollama"
 ]
+
+[tool.mypy]
+exclude = ["^data/", "^\\.venv/", "^moulinette_pkg/"]
