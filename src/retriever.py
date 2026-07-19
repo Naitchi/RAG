@@ -1,5 +1,5 @@
 from .pydantic_validation import load_rag_dataset
-from typing import Any
+from typing import Any, cast
 import bm25s
 import json
 
@@ -45,7 +45,7 @@ class Retriever:
         self.retriver = bm25s.BM25.load(self.index_path, load_corpus=True)
         tokenized_query: Any = bm25s.tokenize(prompt)
         result, _ = self.retriver.retrieve(tokenized_query, k=k)
-        return result[0].tolist()
+        return cast(list[dict[str, Any]], result[0].tolist())
 
     def retrieve_from_dataset(
         self, dataset_path: str, k: int

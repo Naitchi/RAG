@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Sequence
 import uuid
 
 
@@ -46,7 +46,7 @@ class RagDataset(BaseModel):
         `UnansweredQuestion`, the first matching member of the union).
         """
         if isinstance(data, dict) and "rag_questions" in data:
-            parsed = []
+            parsed: list[AnsweredQuestion | UnansweredQuestion] = []
             for q in data["rag_questions"]:
                 if "sources" in q and "answer" in q:
                     parsed.append(
@@ -95,7 +95,7 @@ class StudentSearchResults(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    search_results: List[MinimalSearchResults]
+    search_results: Sequence[MinimalSearchResults]
     k: int
 
 
@@ -104,7 +104,7 @@ class StudentSearchResultsAndAnswer(StudentSearchResults):
 
     model_config = ConfigDict(extra="ignore")
 
-    search_results: List[MinimalAnswer]
+    search_results: Sequence[MinimalAnswer]
 
 
 def load_rag_dataset(dataset_path: str) -> RagDataset:
