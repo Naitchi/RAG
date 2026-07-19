@@ -1,4 +1,4 @@
-from typing import List
+from typing import Any, List, Sequence
 from .pydantic_validation import (
     AnsweredQuestion,
     MinimalSource,
@@ -23,7 +23,7 @@ class Evaluation:
         return True
 
     def check_number_answers_with_sources(
-        self, list_questions: list, student: bool = False
+        self, list_questions: Sequence[Any], student: bool = False
     ) -> int:
         """Count questions that have at least one attached source.
 
