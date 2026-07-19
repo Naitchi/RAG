@@ -152,63 +152,63 @@ class Evaluation:
                 [1, 3, 5, 10] up to `k`.
             max_context_length: Maximum allowed source length in
                 characters, used to validate the student output.
+
+        Raises:
+            Any exception from loading either file or from an invalid
+            `k`, rather than printing an error and returning silently:
+            the caller (`RagSystem.evaluate`) already has its own
+            try/except and must be the one deciding how to report it.
         """
-        try:
-            with open(student_search_results_path, "r") as f:
-                student_answers = StudentSearchResults.model_validate_json(
-                    f.read()
-                )
-
-            with open(dataset_path, "r") as f:
-                dataset = RagDataset.model_validate_json(f.read())
-            if k not in [1, 3, 5, 10]:
-                raise ValueError("k must be one of [1, 3, 5, 10]")
-            chunks = [
-                source
-                for item in student_answers.search_results
-                for source in item.retrieved_sources
-            ]
-
-            print(
-                "Student data is valid: "
-                f"{self.check_chunk_length(max_context_length, chunks)}"
-            )
-            print(f"Total number of questions: {len(dataset.rag_questions)}")
-            print(
-                "Total number of questions with sources: "
-                f"{self.check_number_answers_with_sources(
-                    dataset.rag_questions)}"
-            )
-            print(
-                "Total number of questions with student sources: "
-                f"{self.check_number_answers_with_sources(
-                    student_answers.search_results, True)}"
+        with open(student_search_results_path, "r") as f:
+            student_answers = StudentSearchResults.model_validate_json(
+                f.read()
             )
 
-            print("\nEvaluation Results")
-            print("========================================")
+        with open(dataset_path, "r") as f:
+            dataset = RagDataset.model_validate_json(f.read())
+        if k not in [1, 3, 5, 10]:
+            raise ValueError("k must be one of [1, 3, 5, 10]")
+        chunks = [
+            source
+            for item in student_answers.search_results
+            for source in item.retrieved_sources
+        ]
+
+        print(
+            "Student data is valid: "
+            f"{self.check_chunk_length(max_context_length, chunks)}"
+        )
+        print(f"Total number of questions: {len(dataset.rag_questions)}")
+        print(
+            "Total number of questions with sources: "
+            f"{self.check_number_answers_with_sources(
+                dataset.rag_questions)}"
+        )
+        print(
+            "Total number of questions with student sources: "
+            f"{self.check_number_answers_with_sources(
+                student_answers.search_results, True)}"
+        )
+
+        print("\nEvaluation Results")
+        print("========================================")
+        print(f"Questions evaluated: {len(student_answers.search_results)}")
+        print(
+            "Recall@1: "
+            f"{self.calculate_recall(student_answers, dataset, k=1)}"
+        )
+        if k > 1:
             print(
-                f"Questions evaluated: {len(student_answers.search_results)}"
+                "Recall@3: "
+                f"{self.calculate_recall(student_answers, dataset, k=3)}"
             )
+        if k > 3:
             print(
-                "Recall@1: "
-                f"{self.calculate_recall(student_answers, dataset, k=1)}"
+                "Recall@5: "
+                f"{self.calculate_recall(student_answers, dataset, k=5)}"
             )
-            if k > 1:
-                print(
-                    "Recall@3: "
-                    f"{self.calculate_recall(student_answers, dataset, k=3)}"
-                )
-            if k > 3:
-                print(
-                    "Recall@5: "
-                    f"{self.calculate_recall(student_answers, dataset, k=5)}"
-                )
-            if k > 5:
-                print(
-                    "Recall@10: "
-                    f"{self.calculate_recall(student_answers, dataset, k=10)}"
-                )
-        except Exception as e:
-            print(f"Error in evaluate_dataset: {e}")
-            return
+        if k > 5:
+            print(
+                "Recall@10: "
+                f"{self.calculate_recall(student_answers, dataset, k=10)}"
+            )
