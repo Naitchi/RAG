@@ -50,7 +50,6 @@ class Llm:
             options={"num_ctx": 4098, "temperature": 0.2},
         )
         answer = str(response["message"]["content"])
-        print(f"Response: {answer}")
         return answer
 
     def answer_dataset(
