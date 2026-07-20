@@ -4,13 +4,15 @@ install-ollama:
 	curl -fsSL https://ollama.com/install.sh | sh
 
 pull-qwen:
-	ollama serve 2>/dev/null & sleep 2 && ollama pull qwen3:0.6b
+	ollama serve > /dev/null 2>&1 &
+	sleep 2
+	ollama pull qwen3:0.6b
 
-install: install-ollama pull-qwen 
+install: pull-qwen 
 	uv sync  
 	
 run:
-	ollama serve 2>/dev/null & sleep 2 && uv run python -m src $(ARGS)
+	uv run python -m src $(ARGS)
 
 debug:
 	uv run python -m pdb $(ARGS)

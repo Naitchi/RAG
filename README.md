@@ -27,14 +27,7 @@ The repository is structured around a fully local workflow:
 make install
 ```
 
-This installs the Python dependencies, starts the Ollama installation flow, and pulls `qwen3:0.6b`.
-
-If you prefer manual setup:
-
-```bash
-uv sync
-ollama pull qwen3:0.6b
-```
+This installs the Python dependencies, starts the Ollama installation flow, and pulls `qwen3:0.6b` and start the server. You have to use it before every session.
 
 ### Execution
 
@@ -148,7 +141,7 @@ uv run python -m src index --max_chunk_size 2000
 ### Search for relevant chunks (single query)
 
 ```bash
-make run ARGS="search 'What is the default value of trust_remote_code in vLLM's LLM class constructor?' --k 5"
+make run ARGS="search 'What is the default value of trust_remote_code in vLLM s LLM class constructor?' --k 10"
 # ou
 uv run python -m src search "What is the default value of trust_remote_code in vLLM's LLM class constructor?" --k 5
 ```
